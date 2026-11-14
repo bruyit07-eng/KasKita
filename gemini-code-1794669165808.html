@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>KasKita — Pencatatan Keuangan Pribadi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      background-color: #f0f7ff;
+      color: #0f172a;
+    }
+    .sky-card {
+      background-color: #ffffff;
+      border: 1px solid #e0f2fe;
+      box-shadow: 0 2px 10px -2px rgba(2, 132, 199, 0.06);
+    }
+    .wallet-scroll::-webkit-scrollbar {
+      height: 6px;
+    }
+    .wallet-scroll::-webkit-scrollbar-thumb {
+      background-color: #bae6fd;
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+<body class="min-h-screen antialiased selection:bg-sky-200 selection:text-sky-900">
+
+  <!-- Navbar -->
+  <header class="sticky top-0 z-30 bg-white/85 backdrop-blur-md border-b border-sky-100">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-sky-500 to-blue-600 flex items-center justify-center text-white shadow-sm shadow-sky-500/25">
+          <i data-lucide="wallet" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <span class="text-lg font-bold tracking-tight text-slate-900">Kas<span class="text-sky-600">Kita</span></span>
+          <span class="hidden sm:inline-block ml-2 text-xs font-medium px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200/70">Personal Finance</span>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5">
+        <select id="periodFilter" onchange="applyFilters()" class="text-sm bg-sky-50 hover:bg-sky-100/80 text-sky-900 font-medium rounded-xl px-3 py-2 border border-sky-200/70 focus:outline-none focus:ring-2 focus:ring-sky-400 cursor-pointer transition">
+          <option value="month">Bulan Ini</option>
+          <option value="all">Semua Waktu</option>
+        </select>
+
+        <button onclick="openTransactionModal()" class="inline-flex items-center gap-2 bg-sky-600 hover:bg-sky-700 active:scale-[0.99] text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-sm shadow-sky-600/20 transition">
+          <i data-lucide="plus" class="w-4 h-4"></i>
+          <span>Catat Transaksi</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="max-w-6xl mx-auto px-4 sm:px-6 py-7 space-y-6">
+
+    <!-- Loading Banner -->
+    <div id="loadingBanner" class="flex items-center justify-center gap-2.5 py-3 px-4 rounded-xl bg-sky-100/80 border border-sky-200 text-sky-800 text-sm font-medium">
+      <svg class="animate-spin h-4 w-4 text-sky-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+      </svg>
+      <span>Menyinkronkan data dompet & transaksi...</span>
+    </div>
+
+    <!-- Summary KPI Cards -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Saldo Bersih -->
+      <div class="bg-gradient-to-br from-sky-600 via-sky-500 to-blue-500 text-white rounded-2xl p-5 shadow-md shadow-sky-500/15">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-sky-100">Total Saldo Aktif</span>
+          <div class="w-8 h-8 rounded-lg bg-white/15 flex items-center justify-center">
+            <i data-lucide="landmark" class="w-4 h-4 text-white"></i>
+          </div>
+        </div>
+        <div id="totalBalance" class="text-2xl sm:text-3xl font-bold tracking-tight">Rp 0</div>
+        <p id="balanceSubtitle" class="text-xs text-sky-100 mt-1.5">Akumulasi seluruh dompet</p>
+      </div>
+
+      <!-- Total Pemasukan -->
+      <div class="sky-card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Pemasukan</span>
+          <div class="w-8 h-8 rounded-lg bg-teal-50 flex items-center justify-center">
+            <i data-lucide="arrow-down-left" class="w-4 h-4 text-teal-600"></i>
+          </div>
+        </div>
+        <div id="totalIncome" class="text-2xl sm:text-3xl font-bold text-teal-600 tracking-tight">Rp 0</div>
+        <p id="incomeCount" class="text-xs text-slate-500 mt-1.5">0 transaksi masuk</p>
+      </div>
+
+      <!-- Total Pengeluaran -->
+      <div class="sky-card rounded-2xl p-5">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Total Pengeluaran</span>
+          <div class="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center">
+            <i data-lucide="arrow-up-right" class="w-4 h-4 text-rose-500"></i>
+          </div>
+        </div>
+        <div id="totalExpense" class="text-2xl sm:text-3xl font-bold text-rose-500 tracking-tight">Rp 0</div>
+        <p id="expenseCount" class="text-xs text-slate-500 mt-1.5">0 transaksi keluar</p>
+      </div>
+    </section>
+
+    <!-- Multi-Wallet Section -->
+    <section class="sky-card rounded-2xl p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <div class="flex items-center gap-2">
+            <h2 class="text-base font-bold text-slate-900">Dompet Saya</h2>
+            <span id="activeWalletBadge" class="hidden text-xs font-medium px-2.5 py-0.5 rounded-full bg-sky-100 text-sky-700">
+              Filter aktif
+            </span>
+          </div>
+          <p class="text-xs text-slate-500">Klik kartu dompet untuk memfilter riwayat transaksi atau tambah dompet baru</p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button id="resetWalletFilterBtn" onclick="selectWallet('all')" class="hidden text-xs font-semibold text-sky-600 hover:text-sky-800 px-3 py-2 rounded-xl bg-sky-50 hover:bg-sky-100 transition">
+            Tampilkan Semua
+          </button>
+          <button onclick="openWalletModal()" class="inline-flex items-center gap-1.5 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 border border-sky-200/80 px-3.5 py-2 rounded-xl transition">
+            <i data-lucide="plus-circle" class="w-4 h-4 text-sky-600"></i>
+            <span>Tambah Dompet</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="walletGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
+        <!-- Kartu dompet dirender via JS -->
+      </div>
+    </section>
+
+    <!-- Charts Section -->
+    <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <!-- Bar Chart: Arus Kas Bulanan -->
+      <div class="lg:col-span-7 sky-card rounded-2xl p-5">
+        <div class="mb-4">
+          <h2 class="text-base font-bold text-slate-900">Arus Kas 6 Bulan Terakhir</h2>
+          <p class="text-xs text-slate-500">Perbandingan pemasukan dan pengeluaran bulanan</p>
+        </div>
+        <div class="relative h-64">
+          <canvas id="cashflowChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Doughnut Chart: Proporsi Pengeluaran -->
+      <div class="lg:col-span-5 sky-card rounded-2xl p-5">
+        <div class="mb-4">
+          <h2 class="text-base font-bold text-slate-900">Pengeluaran per Kategori</h2>
+          <p class="text-xs text-slate-500">Distribusi belanja berdasarkan kategori</p>
+        </div>
+        <div class="relative h-64 flex items-center justify-center">
+          <canvas id="categoryChart"></canvas>
+          <div id="emptyChartText" class="hidden text-center text-sm text-slate-400">
+            Belum ada data pengeluaran pada filter ini.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Transaction History -->
+    <section class="sky-card rounded-2xl overflow-hidden">
+      <div class="p-5 border-b border-sky-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <h2 class="text-base font-bold text-slate-900">Riwayat Transaksi</h2>
+          <p class="text-xs text-slate-500">Catatan pemasukan dan pengeluaran per dompet</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <div class="relative">
+            <i data-lucide="search" class="w-4 h-4 text-sky-400 absolute left-3 top-1/2 -translate-y-1/2"></i>
+            <input type="text" id="searchInput" oninput="applyFilters()" placeholder="Cari deskripsi..."
+              class="pl-9 pr-3 py-1.5 text-sm bg-sky-50/60 border border-sky-200/80 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 focus:bg-white transition w-44 sm:w-48" />
+          </div>
+
+          <select id="walletFilterDropdown" onchange="selectWallet(this.value)" class="text-sm bg-sky-50/60 border border-sky-200/80 text-slate-700 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-400">
+            <option value="all">Semua Dompet</option>
+          </select>
+
+          <select id="typeFilter" onchange="applyFilters()" class="text-sm bg-sky-50/60 border border-sky-200/80 text-slate-700 rounded-xl px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-sky-400">
+            <option value="all">Semua Tipe</option>
+            <option value="Pemasukan">Pemasukan</option>
+            <option value="Pengeluaran">Pengeluaran</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-sky-50/70 text-sky-900/70 text-xs uppercase tracking-wider border-b border-sky-100">
+              <th class="py-3.5 px-5 font-semibold">Tanggal</th>
+              <th class="py-3.5 px-5 font-semibold">Dompet</th>
+              <th class="py-3.5 px-5 font-semibold">Kategori</th>
+              <th class="py-3.5 px-5 font-semibold">Deskripsi</th>
+              <th class="py-3.5 px-5 font-semibold text-right">Jumlah</th>
+              <th class="py-3.5 px-5 font-semibold text-center">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="transactionTableBody" class="divide-y divide-sky-100/70 text-sm">
+            <!-- Diisi dinamis -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Modal Tambah Transaksi -->
+  <div id="transactionModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-sky-100">
+      <div class="flex items-center justify-between mb-5">
+        <h3 class="text-lg font-bold text-slate-900">Catat Transaksi Baru</h3>
+        <button onclick="closeTransactionModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="transactionForm" onsubmit="handleTransactionSubmit(event)" class="space-y-4">
+        <!-- Tipe Toggle -->
+        <div class="grid grid-cols-2 gap-2 p-1 bg-sky-50 rounded-xl border border-sky-100">
+          <button type="button" id="btnPengeluaran" onclick="setTransactionType('Pengeluaran')"
+            class="py-2 text-sm font-semibold rounded-lg bg-white text-rose-500 shadow-xs transition">
+            Pengeluaran
+          </button>
+          <button type="button" id="btnPemasukan" onclick="setTransactionType('Pemasukan')"
+            class="py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition">
+            Pemasukan
+          </button>
+        </div>
+        <input type="hidden" id="inputTipe" value="Pengeluaran" />
+
+        <!-- Pilih Dompet -->
+        <div>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs font-semibold text-slate-600">Dompet / Sumber Dana</label>
+            <button type="button" onclick="openWalletModal(true)" class="text-xs font-semibold text-sky-600 hover:text-sky-700">
+              + Dompet Baru
+            </button>
+          </div>
+          <select id="inputDompet" required
+            class="w-full px-3.5 py-2.5 text-sm border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 bg-white">
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Jumlah (Rp)</label>
+          <input type="number" id="inputJumlah" required min="1" placeholder="Contoh: 50000"
+            class="w-full px-3.5 py-2.5 text-sm border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400" />
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Kategori</label>
+            <select id="inputKategori" required
+              class="w-full px-3 py-2.5 text-sm border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 bg-white">
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">Tanggal</label>
+            <input type="date" id="inputTanggal" required
+              class="w-full px-3 py-2.5 text-sm border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Deskripsi</label>
+          <input type="text" id="inputDeskripsi" required placeholder="Contoh: Kopi susu / Transfer gaji"
+            class="w-full px-3.5 py-2.5 text-sm border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400" />
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeTransactionModal()" class="px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-sky-50 rounded-xl transition">
+            Batal
+          </button>
+          <button type="submit" id="submitTxBtn" class="px-5 py-2.5 text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white rounded-xl shadow-sm transition">
+            Simpan Transaksi
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Tambah Dompet -->
+  <div id="walletModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl border border-sky-100">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-bold text-slate-900">Tambah Dompet Baru</h3>
+        <button onclick="closeWalletModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-lg">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+
+      <form id="walletForm" onsubmit="handleWalletSubmit(event)" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Nama Dompet</label>
+          <input type="text" id="walletNameInput" required placeholder="Contoh: GoPay, Dana, Mandiri"
+            class="w-full px-3.5 py-2.5 text-sm border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400" />
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Jenis Dompet</label>
+          <select id="walletTypeInput"
+            class="w-full px-3.5 py-2.5 text-sm border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400 bg-white">
+            <option value="E-Wallet">E-Wallet</option>
+            <option value="Bank">Rekening Bank</option>
+            <option value="Tunai">Tunai (Cash)</option>
+            <option value="Lainnya">Lainnya</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Saldo Awal (Rp)</label>
+          <input type="number" id="walletBalanceInput" value="0" min="0" placeholder="0"
+            class="w-full px-3.5 py-2.5 text-sm border border-sky-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-sky-400" />
+        </div>
+
+        <div class="pt-2 flex items-center justify-end gap-2">
+          <button type="button" onclick="closeWalletModal()" class="px-4 py-2 text-sm font-medium text-slate-600 hover:bg-sky-50 rounded-xl transition">
+            Batal
+          </button>
+          <button type="submit" id="submitWalletBtn" class="px-4 py-2 text-sm font-semibold bg-sky-600 hover:bg-sky-700 text-white rounded-xl shadow-sm transition">
+            Simpan Dompet
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div id="toast" class="fixed bottom-5 right-5 z-50 hidden items-center gap-2 bg-sky-900 text-white text-sm font-medium px-4 py-3 rounded-xl shadow-lg">
+    <span id="toastMessage">Berhasil disimpan</span>
+  </div>
+
+  <script>
+    const CATEGORIES = {
+      Pengeluaran: ['Makanan & Minuman', 'Transportasi', 'Tagihan & Utilitas', 'Belanja', 'Kesehatan', 'Hiburan', 'Pendidikan', 'Lainnya'],
+      Pemasukan: ['Gaji', 'Bonus & Tunjangan', 'Freelance / Bisnis', 'Investasi', 'Hadiah', 'Lainnya']
+    };
+
+    const CHART_COLORS = [
+      '#0284c7', '#38bdf8', '#0d9488', '#6366f1', '#8b5cf6', '#f59e0b', '#fb7185', '#64748b'
+    ];
+
+    const DEFAULT_LOCAL_WALLETS = [
+      { id: 'WLT-1', nama: 'Cash', jenis: 'Tunai', saldoAwal: 0 },
+      { id: 'WLT-2', nama: 'SPay', jenis: 'E-Wallet', saldoAwal: 0 },
+      { id: 'WLT-3', nama: 'OVO', jenis: 'E-Wallet', saldoAwal: 0 },
+      { id: 'WLT-4', nama: 'BCA', jenis: 'Bank', saldoAwal: 0 }
+    ];
+
+    let allWallets = [];
+    let allTransactions = [];
+    let selectedWallet = 'all';
+    let returnToTxModalAfterWallet = false;
+    let cashflowChartInstance = null;
+    let categoryChartInstance = null;
+
+    const isAppsScript = typeof google !== 'undefined' && google.script && google.script.run;
+
+    document.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      setTransactionType('Pengeluaran');
+      document.getElementById('inputTanggal').value = new Date().toISOString().split('T')[0];
+      loadInitialData();
+    });
+
+    function formatRupiah(num) {
+      return new Intl.NumberFormat('id-ID', {
+        style: 'currency',
+        currency: 'IDR',
+        minimumFractionDigits: 0
+      }).format(num);
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      document.getElementById('toastMessage').textContent = msg;
+      toast.classList.remove('hidden');
+      toast.classList.add('flex');
+      setTimeout(() => {
+        toast.classList.add('hidden');
+        toast.classList.remove('flex');
+      }, 3000);
+    }
+
+    function loadInitialData() {
+      const banner = document.getElementById('loadingBanner');
+      banner.classList.remove('hidden');
+
+      if (isAppsScript) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            allWallets = (res && res.wallets && res.wallets.length) ? res.wallets : [...DEFAULT_LOCAL_WALLETS];
+            allTransactions = (res && res.transactions) ? res.transactions : [];
+            banner.classList.add('hidden');
+            syncWalletSelects();
+            applyFilters();
+          })
+          .withFailureHandler((err) => {
+            banner.innerHTML = `<span class="text-rose-600">Gagal memuat data: ${err.message}</span>`;
+          })
+          .getInitialData();
+      } else {
+        const savedWallets = localStorage.getItem('kaskita_wallets_v2');
+        const savedTx = localStorage.getItem('kaskita_tx_v2');
+        allWallets = savedWallets ? JSON.parse(savedWallets) : [...DEFAULT_LOCAL_WALLETS];
+        allTransactions = savedTx ? JSON.parse(savedTx) : [];
+        banner.classList.add('hidden');
+        syncWalletSelects();
+        applyFilters();
+      }
+    }
+
+    function syncWalletSelects() {
+      const formSelect = document.getElementById('inputDompet');
+      const filterSelect = document.getElementById('walletFilterDropdown');
+
+      formSelect.innerHTML = allWallets
+        .map(w => `<option value="${w.nama}">${w.nama} (${w.jenis})</option>`)
+        .join('');
+
+      filterSelect.innerHTML = `<option value="all">Semua Dompet</option>` +
+        allWallets.map(w => `<option value="${w.nama}">${w.nama}</option>`).join('');
+
+      filterSelect.value = selectedWallet;
+    }
+
+    function getWalletBalance(wallet) {
+      let balance = Number(wallet.saldoAwal) || 0;
+      allTransactions.forEach(tx => {
+        if (tx.dompet === wallet.nama) {
+          if (tx.tipe === 'Pemasukan') balance += tx.jumlah;
+          else balance -= tx.jumlah;
+        }
+      });
+      return balance;
+    }
+
+    function getWalletIcon(jenis) {
+      if (jenis === 'Tunai') return 'banknote';
+      if (jenis === 'Bank') return 'building-2';
+      if (jenis === 'E-Wallet') return 'smartphone';
+      return 'wallet';
+    }
+
+    function renderWallets() {
+      const grid = document.getElementById('walletGrid');
+      grid.innerHTML = allWallets.map(w => {
+        const balance = getWalletBalance(w);
+        const isSelected = selectedWallet === w.nama;
+        const cardStyle = isSelected
+          ? 'bg-sky-50/90 border-sky-500 ring-2 ring-sky-400/40'
+          : 'bg-white hover:bg-sky-50/40 border-sky-100 hover:border-sky-300';
+
+        return `
+          <div onclick="selectWallet('${w.nama}')"
+            class="group relative cursor-pointer rounded-xl p-4 border transition-all ${cardStyle}">
+            <div class="flex items-start justify-between gap-2 mb-2.5">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-lg bg-sky-100/80 text-sky-600 flex items-center justify-center">
+                  <i data-lucide="${getWalletIcon(w.jenis)}" class="w-4 h-4"></i>
+                </div>
+                <div>
+                  <h3 class="text-sm font-bold text-slate-900 leading-tight">${w.nama}</h3>
+                  <span class="text-[11px] font-medium text-slate-400">${w.jenis}</span>
+                </div>
+              </div>
+              <button type="button" onclick="event.stopPropagation(); removeWallet('${w.id}', '${w.nama}')"
+                title="Hapus dompet"
+                class="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-rose-500 p-1 rounded-lg hover:bg-rose-50 transition">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <div class="text-base font-bold ${balance < 0 ? 'text-rose-500' : 'text-slate-900'}">
+              ${formatRupiah(balance)}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+
+    function selectWallet(walletName) {
+      if (selectedWallet === walletName && walletName !== 'all') {
+        selectedWallet = 'all';
+      } else {
+        selectedWallet = walletName;
+      }
+
+      document.getElementById('walletFilterDropdown').value = selectedWallet;
+
+      const badge = document.getElementById('activeWalletBadge');
+      const resetBtn = document.getElementById('resetWalletFilterBtn');
+      if (selectedWallet === 'all') {
+        badge.classList.add('hidden');
+        resetBtn.classList.add('hidden');
+      } else {
+        badge.textContent = `Filter: ${selectedWallet}`;
+        badge.classList.remove('hidden');
+        resetBtn.classList.remove('hidden');
+      }
+
+      applyFilters();
+    }
+
+    function setTransactionType(type) {
+      document.getElementById('inputTipe').value = type;
+      const btnOut = document.getElementById('btnPengeluaran');
+      const btnIn = document.getElementById('btnPemasukan');
+
+      if (type === 'Pengeluaran') {
+        btnOut.className = 'py-2 text-sm font-semibold rounded-lg bg-white text-rose-500 shadow-xs transition';
+        btnIn.className = 'py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition';
+      } else {
+        btnIn.className = 'py-2 text-sm font-semibold rounded-lg bg-white text-teal-600 shadow-xs transition';
+        btnOut.className = 'py-2 text-sm font-semibold rounded-lg text-slate-600 hover:text-slate-900 transition';
+      }
+
+      const select = document.getElementById('inputKategori');
+      select.innerHTML = CATEGORIES[type]
+        .map(cat => `<option value="${cat}">${cat}</option>`)
+        .join('');
+    }
+
+    function openTransactionModal() {
+      if (selectedWallet !== 'all') {
+        document.getElementById('inputDompet').value = selectedWallet;
+      }
+      const modal = document.getElementById('transactionModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeTransactionModal() {
+      const modal = document.getElementById('transactionModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.getElementById('transactionForm').reset();
+      setTransactionType('Pengeluaran');
+      document.getElementById('inputTanggal').value = new Date().toISOString().split('T')[0];
+    }
+
+    function openWalletModal(fromTxModal = false) {
+      returnToTxModalAfterWallet = fromTxModal;
+      if (fromTxModal) {
+        document.getElementById('transactionModal').classList.add('hidden');
+        document.getElementById('transactionModal').classList.remove('flex');
+      }
+      const modal = document.getElementById('walletModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      document.getElementById('walletNameInput').focus();
+    }
+
+    function closeWalletModal() {
+      const modal = document.getElementById('walletModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+      document.getElementById('walletForm').reset();
+
+      if (returnToTxModalAfterWallet) {
+        openTransactionModal();
+        returnToTxModalAfterWallet = false;
+      }
+    }
+
+    function handleWalletSubmit(e) {
+      e.preventDefault();
+      const btn = document.getElementById('submitWalletBtn');
+      btn.disabled = true;
+      btn.textContent = 'Menyimpan...';
+
+      const payload = {
+        nama: document.getElementById('walletNameInput').value.trim(),
+        jenis: document.getElementById('walletTypeInput').value,
+        saldoAwal: Number(document.getElementById('walletBalanceInput').value) || 0
+      };
+
+      if (isAppsScript) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            btn.disabled = false;
+            btn.textContent = 'Simpan Dompet';
+            if (res && res.success) {
+              allWallets.push(res.wallet);
+              syncWalletSelects();
+              applyFilters();
+              showToast(`Dompet "${res.wallet.nama}" ditambahkan`);
+              const shouldReopenTx = returnToTxModalAfterWallet;
+              closeWalletModal();
+              if (shouldReopenTx) {
+                document.getElementById('inputDompet').value = res.wallet.nama;
+              }
+            } else {
+              alert(res.message || 'Gagal menambah dompet.');
+            }
+          })
+          .withFailureHandler((err) => {
+            btn.disabled = false;
+            btn.textContent = 'Simpan Dompet';
+            alert('Terjadi kesalahan: ' + err.message);
+          })
+          .addWallet(payload);
+      } else {
+        const exists = allWallets.some(w => w.nama.toLowerCase() === payload.nama.toLowerCase());
+        btn.disabled = false;
+        btn.textContent = 'Simpan Dompet';
+        if (exists) {
+          alert('Nama dompet sudah terdaftar.');
+          return;
+        }
+        const newWallet = { id: 'WLT-' + Date.now(), ...payload };
+        allWallets.push(newWallet);
+        localStorage.setItem('kaskita_wallets_v2', JSON.stringify(allWallets));
+        syncWalletSelects();
+        applyFilters();
+        showToast(`Dompet "${newWallet.nama}" ditambahkan`);
+        const shouldReopenTx = returnToTxModalAfterWallet;
+        closeWalletModal();
+        if (shouldReopenTx) {
+          document.getElementById('inputDompet').value = newWallet.nama;
+        }
+      }
+    }
+
+    function removeWallet(id, nama) {
+      if (allWallets.length <= 1) {
+        alert('Minimal harus tersisa satu dompet.');
+        return;
+      }
+      if (!confirm(`Hapus dompet "${nama}"? Riwayat transaksi lama tetap tersimpan.`)) return;
+
+      if (isAppsScript) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res && res.success) {
+              allWallets = allWallets.filter(w => w.id !== id);
+              if (selectedWallet === nama) selectedWallet = 'all';
+              syncWalletSelects();
+              applyFilters();
+              showToast(`Dompet "${nama}" dihapus`);
+            }
+          })
+          .deleteWallet(id);
+      } else {
+        allWallets = allWallets.filter(w => w.id !== id);
+        if (selectedWallet === nama) selectedWallet = 'all';
+        localStorage.setItem('kaskita_wallets_v2', JSON.stringify(allWallets));
+        syncWalletSelects();
+        applyFilters();
+        showToast(`Dompet "${nama}" dihapus`);
+      }
+    }
+
+    function handleTransactionSubmit(e) {
+      e.preventDefault();
+      const submitBtn = document.getElementById('submitTxBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Menyimpan...';
+
+      const payload = {
+        tipe: document.getElementById('inputTipe').value,
+        dompet: document.getElementById('inputDompet').value,
+        jumlah: Number(document.getElementById('inputJumlah').value),
+        kategori: document.getElementById('inputKategori').value,
+        tanggal: document.getElementById('inputTanggal').value,
+        deskripsi: document.getElementById('inputDeskripsi').value.trim()
+      };
+
+      if (isAppsScript) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Simpan Transaksi';
+            if (res && res.success) {
+              allTransactions.unshift(res.transaction);
+              closeTransactionModal();
+              applyFilters();
+              showToast('Transaksi berhasil dicatat!');
+            }
+          })
+          .withFailureHandler((err) => {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Simpan Transaksi';
+            alert('Terjadi kesalahan: ' + err.message);
+          })
+          .addTransaction(payload);
+      } else {
+        const newTx = { id: 'KK-' + Date.now(), ...payload };
+        allTransactions.unshift(newTx);
+        localStorage.setItem('kaskita_tx_v2', JSON.stringify(allTransactions));
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Simpan Transaksi';
+        closeTransactionModal();
+        applyFilters();
+        showToast('Transaksi disimpan (Mode Lokal)');
+      }
+    }
+
+    function removeTransaction(id) {
+      if (!confirm('Hapus transaksi ini?')) return;
+
+      if (isAppsScript) {
+        google.script.run
+          .withSuccessHandler((res) => {
+            if (res && res.success) {
+              allTransactions = allTransactions.filter(tx => tx.id !== id);
+              applyFilters();
+              showToast('Transaksi dihapus');
+            }
+          })
+          .deleteTransaction(id);
+      } else {
+        allTransactions = allTransactions.filter(tx => tx.id !== id);
+        localStorage.setItem('kaskita_tx_v2', JSON.stringify(allTransactions));
+        applyFilters();
+        showToast('Transaksi dihapus');
+      }
+    }
+
+    function applyFilters() {
+      const period = document.getElementById('periodFilter').value;
+      const typeFilter = document.getElementById('typeFilter').value;
+      const keyword = document.getElementById('searchInput').value.toLowerCase();
+
+      const now = new Date();
+      const currentMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      // Filter berdasarkan dompet terpilih
+      const walletScopedTx = allTransactions.filter(tx =>
+        selectedWallet === 'all' || tx.dompet === selectedWallet
+      );
+
+      // Filter berdasarkan periode
+      const periodData = walletScopedTx.filter(tx => {
+        if (period === 'month') {
+          return tx.tanggal.startsWith(currentMonthPrefix);
+        }
+        return true;
+      });
+
+      // Filter untuk tabel riwayat
+      const tableData = periodData.filter(tx => {
+        const matchType = typeFilter === 'all' || tx.tipe === typeFilter;
+        const matchQuery =
+          tx.deskripsi.toLowerCase().includes(keyword) ||
+          tx.kategori.toLowerCase().includes(keyword) ||
+          tx.dompet.toLowerCase().includes(keyword);
+        return matchType && matchQuery;
+      });
+
+      renderWallets();
+      updateSummaryCards(periodData);
+      renderCategoryChart(periodData);
+      renderCashflowChart(walletScopedTx);
+      renderTable(tableData);
+    }
+
+    function updateSummaryCards(periodData) {
+      let income = 0, expense = 0, incCount = 0, expCount = 0;
+
+      periodData.forEach(tx => {
+        if (tx.tipe === 'Pemasukan') {
+          income += tx.jumlah;
+          incCount++;
+        } else {
+          expense += tx.jumlah;
+          expCount++;
+        }
+      });
+
+      // Total Saldo Aktif menghitung saldo awal + seluruh mutasi dompet terpilih
+      const targetWallets = selectedWallet === 'all'
+        ? allWallets
+        : allWallets.filter(w => w.nama === selectedWallet);
+
+      const totalActiveBalance = targetWallets.reduce((sum, w) => sum + getWalletBalance(w), 0);
+
+      document.getElementById('totalBalance').textContent = formatRupiah(totalActiveBalance);
+      document.getElementById('balanceSubtitle').textContent =
+        selectedWallet === 'all' ? 'Akumulasi seluruh dompet' : `Saldo aktif dompet ${selectedWallet}`;
+
+      document.getElementById('totalIncome').textContent = formatRupiah(income);
+      document.getElementById('totalExpense').textContent = formatRupiah(expense);
+      document.getElementById('incomeCount').textContent = `${incCount} transaksi masuk`;
+      document.getElementById('expenseCount').textContent = `${expCount} transaksi keluar`;
+    }
+
+    function renderCategoryChart(data) {
+      const expenses = data.filter(tx => tx.tipe === 'Pengeluaran');
+      const canvas = document.getElementById('categoryChart');
+      const emptyText = document.getElementById('emptyChartText');
+
+      if (categoryChartInstance) {
+        categoryChartInstance.destroy();
+      }
+
+      if (expenses.length === 0) {
+        canvas.classList.add('hidden');
+        emptyText.classList.remove('hidden');
+        return;
+      }
+
+      canvas.classList.remove('hidden');
+      emptyText.classList.add('hidden');
+
+      const grouped = {};
+      expenses.forEach(tx => {
+        grouped[tx.kategori] = (grouped[tx.kategori] || 0) + tx.jumlah;
+      });
+
+      const labels = Object.keys(grouped);
+      const values = Object.values(grouped);
+
+      categoryChartInstance = new Chart(canvas, {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{
+            data: values,
+            backgroundColor: CHART_COLORS.slice(0, labels.length),
+            borderWidth: 2,
+            borderColor: '#ffffff'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '68%',
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                boxWidth: 12,
+                padding: 14,
+                font: { family: 'Plus Jakarta Sans', size: 12 }
+              }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.label}: ${formatRupiah(ctx.raw)}`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderCashflowChart(data) {
+      const canvas = document.getElementById('cashflowChart');
+      if (cashflowChartInstance) {
+        cashflowChartInstance.destroy();
+      }
+
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+      const months = [];
+      const now = new Date();
+
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        months.push({
+          key,
+          label: `${monthNames[d.getMonth()]} ${d.getFullYear()}`,
+          income: 0,
+          expense: 0
+        });
+      }
+
+      data.forEach(tx => {
+        const prefix = tx.tanggal.slice(0, 7);
+        const target = months.find(m => m.key === prefix);
+        if (target) {
+          if (tx.tipe === 'Pemasukan') target.income += tx.jumlah;
+          else target.expense += tx.jumlah;
+        }
+      });
+
+      cashflowChartInstance = new Chart(canvas, {
+        type: 'bar',
+        data: {
+          labels: months.map(m => m.label),
+          datasets: [
+            {
+              label: 'Pemasukan',
+              data: months.map(m => m.income),
+              backgroundColor: '#0284c7',
+              borderRadius: 6,
+              barPercentage: 0.65
+            },
+            {
+              label: 'Pengeluaran',
+              data: months.map(m => m.expense),
+              backgroundColor: '#fb7185',
+              borderRadius: 6,
+              barPercentage: 0.65
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            y: {
+              beginAtZero: true,
+              grid: { color: '#e0f2fe' },
+              ticks: {
+                font: { family: 'Plus Jakarta Sans', size: 11 },
+                callback: (val) => val >= 1000000 ? `Rp ${val / 1000000}jt` : `Rp ${val / 1000}rb`
+              }
+            },
+            x: {
+              grid: { display: false },
+              ticks: { font: { family: 'Plus Jakarta Sans', size: 11 } }
+            }
+          },
+          plugins: {
+            legend: {
+              position: 'top',
+              align: 'end',
+              labels: { boxWidth: 12, font: { family: 'Plus Jakarta Sans', size: 12 } }
+            },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` ${ctx.dataset.label}: ${formatRupiah(ctx.raw)}`
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderTable(transactions) {
+      const tbody = document.getElementById('transactionTableBody');
+
+      if (transactions.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="6" class="py-10 text-center text-slate-400 text-sm">
+              Tidak ada transaksi yang sesuai dengan filter.
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = transactions.map(tx => {
+        const isIncome = tx.tipe === 'Pemasukan';
+        const badgeClass = isIncome
+          ? 'bg-teal-50 text-teal-700 border-teal-200/70'
+          : 'bg-rose-50 text-rose-600 border-rose-200/70';
+        const amountClass = isIncome ? 'text-teal-600' : 'text-rose-500';
+        const sign = isIncome ? '+' : '-';
+
+        return `
+          <tr class="hover:bg-sky-50/50 transition">
+            <td class="py-3.5 px-5 text-slate-600 whitespace-nowrap">${tx.tanggal}</td>
+            <td class="py-3.5 px-5 whitespace-nowrap">
+              <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200/70">
+                ${tx.dompet}
+              </span>
+            </td>
+            <td class="py-3.5 px-5 whitespace-nowrap">
+              <span class="inline-flex items-center px-2.5 py-0.5 rounded-lg text-xs font-medium border ${badgeClass}">
+                ${tx.kategori}
+              </span>
+            </td>
+            <td class="py-3.5 px-5 text-slate-800 font-medium">${tx.deskripsi}</td>
+            <td class="py-3.5 px-5 text-right font-bold whitespace-nowrap ${amountClass}">
+              ${sign} ${formatRupiah(tx.jumlah)}
+            </td>
+            <td class="py-3.5 px-5 text-center">
+              <button onclick="removeTransaction('${tx.id}')" title="Hapus"
+                class="text-slate-400 hover:text-rose-500 p-1.5 rounded-lg hover:bg-rose-50 transition">
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>
